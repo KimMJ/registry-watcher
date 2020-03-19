@@ -11,31 +11,44 @@ import (
     "time"
     "bytes"
     "net"
+    // "gopkg.in/yaml.v2"
 )
 
 type Harbor_Response struct {
-    Token            string     `json:"token"`
-    Access_token     string     `json:"access_token"`
-    Expires_in       int        `json:"expires_in"`
-    Issued_at        string     `json:"issued_at"`
+    Token            string             `json:"token"`
+    Access_token     string             `json:"access_token"`
+    Expires_in       int                `json:"expires_in"`
+    Issued_at        string             `json:"issued_at"`
 }
 
 type TagList struct {
-    Name            string      `json:"name"`
-    Tags            []string    `json:"tags"`
+    Name            string              `json:"name"`
+    Tags            []string            `json:"tags"`
 }
 
 type DockerArtifact struct {
-    CustomKind      bool        `json:"customKind"`
-    Reference       string      `json:"reference"`
-    Name            string      `json:"name"`
-    Type            string      `json:"type"`
-    Version         string      `json:"version"`
+    CustomKind      bool                `json:"customKind"`
+    Reference       string              `json:"reference"`
+    Name            string              `json:"name"`
+    Type            string              `json:"type"`
+    Version         string              `json:"version"`
 }
 
 type Artifact struct {
-    Artifacts    []DockerArtifact `json:"artifacts"`
+    Artifacts       []DockerArtifact    `json:"artifacts"`
 }
+
+type Manifest struct {
+    Tag             string               `json:"tag"`
+    Digest          string               `json:"digest"`
+    CreationDate    string               `json:"creationDate"`
+}
+
+// type ImageManifests struct {
+//     Images           []Manifest          `json:"images"`
+// }
+
+type ImageManifests map[string]Manifest
 
 func tt() {
     fmt.Println(time.Now())
@@ -170,6 +183,62 @@ func webhookSender() {
 
 }
 
+func ReadJsonFile() {
+    registry := "wonderland-laptop.com"
+    image := "test/busybox"
+    jsonFile, err := ioutil.ReadFile("./db/" + registry + "/" + image + ".json")
+    if err != nil {
+        fmt.Println(err)
+    }
+    var imageManifests ImageManifests
+    err = json.Unmarshal(jsonFile, &imageManifests)
+    if err != nil {
+        fmt.Println(err)
+    }
+    fmt.Printf("%+v\n",imageManifests)
+}
+
+func WriteJsonFile() {
+    registry := "wonderland-laptop.com"
+    image := "test/busybox"
+    // jsonFile, err := ioutil.ReadFile("./db/" + registry + "/" + image + ".json")
+    // if err != nil {
+    //     fmt.Println(err)
+    // }
+    imageManifests := ImageManifests{}
+    // var imageManifests ImageManifests
+    // err = json.Unmarshal(jsonFile, &imageManifests)
+    // if err != nil {
+    //     fmt.Println(err)
+    // }
+
+    manifest := Manifest{"v2", "12345", "123"}
+    manifestv1 := Manifest{"v1", "54321", "123"}
+    fmt.Printf("%+v\n",manifest)
+
+    //TODO: with hash
+    id := manifest.Tag + "-" + manifest.Digest
+    id2 := manifestv1.Tag + "-" + manifestv1.Digest
+    // if imageManifests[id] == nil {
+        // imageManifests[id] = make(map[string]Manifest)
+    // }
+    imageManifests[id] = manifest
+    imageManifests[id2] = manifestv1
+    fmt.Printf("%+v\n",imageManifests)
+    d, err := json.MarshalIndent(&imageManifests, "", "\t")
+    // d, err := json.MarshalIndent(map[string]interface{}{id: manifest}, "", "\t")
+
+    // d, err := json.Marshal(&imageManifests)
+    if err != nil {
+        fmt.Println(err)
+    }
+
+    err = ioutil.WriteFile("./db/" + registry + "/" + image + ".json", d, 0644)
+    if err != nil {
+        fmt.Println(err)
+    }
+}
+
 func (artifacts *Artifact) AddItem(item DockerArtifact) []DockerArtifact {
     artifacts.Artifacts = append(artifacts.Artifacts, item)
     return artifacts.Artifacts
@@ -206,6 +275,20 @@ func main() {
         webhookSender()
         c.JSON(200, gin.H{
             "message": "webhook is sended",
+        })
+    })
+
+    r.GET("/readjson", func(c *gin.Context) {
+        ReadJsonFile()
+        c.JSON(200, gin.H{
+            "message": "read json",
+        })
+    })
+
+    r.GET("/writejson", func(c *gin.Context) {
+        WriteJsonFile()
+        c.JSON(200, gin.H{
+            "message": "write json",
         })
     })
   r.Run(":12345") // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")

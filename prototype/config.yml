@@ -1,0 +1,7 @@
+registries:
+  dockerRegistry:
+    - endpoint: "wonderland-laptop.com"
+      insecure-registry: false
+      images:
+        - "test/busybox"
+  aws: []

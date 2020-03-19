@@ -1,0 +1,12 @@
+{
+	"v1-54321": {
+		"tag": "v1",
+		"digest": "54321",
+		"creationDate": "123"
+	},
+	"v2-12345": {
+		"tag": "v2",
+		"digest": "12345",
+		"creationDate": "123"
+	}
+}
