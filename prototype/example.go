@@ -10,26 +10,27 @@ import (
     "github.com/robfig/cron/v3"
     "time"
     "bytes"
+    "net"
 )
 
 type Harbor_Response struct {
-    Token            string `json:"token"`
-    Access_token     string `json:"access_token"`
-    Expires_in       int    `json:"expires_in"`
-    Issued_at        string `json:"issued_at"`
+    Token            string     `json:"token"`
+    Access_token     string     `json:"access_token"`
+    Expires_in       int        `json:"expires_in"`
+    Issued_at        string     `json:"issued_at"`
 }
 
 type TagList struct {
-    Name    string          `json:"name"`
-    Tags    []string        `json:"tags"`
+    Name            string      `json:"name"`
+    Tags            []string    `json:"tags"`
 }
 
 type DockerArtifact struct {
-    CustomKind  bool        `json:"customKind"`
-    Reference   string      `json:"reference"`
-    Name        string      `json:"name"`
-    Type        string      `json:"type"`
-    Version     string      `json:"version"`
+    CustomKind      bool        `json:"customKind"`
+    Reference       string      `json:"reference"`
+    Name            string      `json:"name"`
+    Type            string      `json:"type"`
+    Version         string      `json:"version"`
 }
 
 type Artifact struct {
@@ -40,6 +41,13 @@ func tt() {
     fmt.Println(time.Now())
     tr := &http.Transport{
         TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+        Dial: (&net.Dialer{
+            Timeout:   5 * time.Second,
+            KeepAlive: 5 * time.Second,
+        }).Dial,
+        TLSHandshakeTimeout:   10 * time.Second,
+        ResponseHeaderTimeout: 10 * time.Second,
+        ExpectContinueTimeout: 1 * time.Second,
     }
     client := &http.Client{Transport: tr}
     //get token
@@ -127,6 +135,13 @@ func webhookSender() {
 
     tr := &http.Transport{
         TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+        Dial: (&net.Dialer{
+            Timeout:   5 * time.Second,
+            KeepAlive: 5 * time.Second,
+        }).Dial,
+        TLSHandshakeTimeout:   10 * time.Second,
+        ResponseHeaderTimeout: 10 * time.Second,
+        ExpectContinueTimeout: 1 * time.Second,
     }
     client := &http.Client{Transport: tr}
     var data Artifact
