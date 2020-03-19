@@ -9,18 +9,31 @@ import (
     "encoding/json"
     "github.com/robfig/cron/v3"
     "time"
+    "bytes"
 )
 
 type Harbor_Response struct {
-    Token            string
-    Access_token     string
-    Expires_in       int
-    Issued_at        string
+    Token            string `json:"token"`
+    Access_token     string `json:"access_token"`
+    Expires_in       int    `json:"expires_in"`
+    Issued_at        string `json:"issued_at"`
 }
 
 type TagList struct {
-    Name    string
-    Tags    []string
+    Name    string          `json:"name"`
+    Tags    []string        `json:"tags"`
+}
+
+type DockerArtifact struct {
+    CustomKind  bool        `json:"customKind"`
+    Reference   string      `json:"reference"`
+    Name        string      `json:"name"`
+    Type        string      `json:"type"`
+    Version     string      `json:"version"`
+}
+
+type Artifact struct {
+    Artifacts    []DockerArtifact `json:"artifacts"`
 }
 
 func tt() {
@@ -29,10 +42,10 @@ func tt() {
         TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
     }
     client := &http.Client{Transport: tr}
-    var harbor string = "https://wonderland-laptop.com"
-    var username string = "admin"
-    var passwd string = "Harbor12345"
-    var repository string = "test/busybox"
+    var harbor string = "https://nwharbor.sec.samsung.net"
+    var username string = "m5.kim"
+    var passwd string = "8vpyil296xb9dmw0lt8uet2o5p8mbsx3"
+    var repository string = "test/mj-test"
     var url string = harbor + "/service/token?service=harbor-registry&scope=repository:" + repository + ":pull,push"
     // fmt.Println(url)
 
@@ -74,7 +87,7 @@ func tt() {
     resp, err = client.Do(req)
     if err != nil {
         fmt.Println(err)
-    } 
+    }
 
     defer resp.Body.Close()
     data, err = ioutil.ReadAll(resp.Body)
@@ -87,6 +100,45 @@ func tt() {
     }
     fmt.Println(tagList.Tags)
 
+}
+
+func webhookSender() {
+    busybox := DockerArtifact{false, "dockerrepo:8081/test/nginx:v2", "dockerrepo:8081/test/nginx", "docker/image", "v2"}
+    debian := DockerArtifact{false, "dockerrepo:8081/test/debian:v1", "dockerrepo:8081/test/debian", "docker/image", "v1"}
+
+    tr := &http.Transport{
+        TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+    }
+    client := &http.Client{Transport: tr}
+    var data Artifact
+    data.AddItem(busybox)
+    data.AddItem(debian)
+    
+    fmt.Printf("%+v\n", data)
+    // curl -i -X POST http://10.251.201.165:30200/webhooks/webhook/test --data @payload.json -H "Content-Type: application/json" --noproxy "*"
+
+    spinnakerUrl := "http://10.251.201.165:30200/webhooks/webhook/test"
+    pbytes, _ := json.Marshal(data)
+    fmt.Println(pbytes)
+    buff := bytes.NewBuffer(pbytes)
+    fmt.Println(buff)
+    req, err := http.NewRequest("POST", spinnakerUrl, buff)
+    req.Header.Set("Content-Type", "application/json")
+    resp, err := client.Do(req)
+    if err != nil {
+        fmt.Println(err)
+    }
+
+    defer resp.Body.Close()
+    body, err := ioutil.ReadAll(resp.Body)
+    bodyString := string(body)
+    fmt.Println(bodyString)
+
+}
+
+func (artifacts *Artifact) AddItem(item DockerArtifact) []DockerArtifact {
+    artifacts.Artifacts = append(artifacts.Artifacts, item)
+    return artifacts.Artifacts
 }
 
 func main() {
@@ -110,70 +162,16 @@ func main() {
     })
 
     r.GET("/poll", func(c *gin.Context) {
-        tr := &http.Transport{
-            TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-        }
-        client := &http.Client{Transport: tr}
-        var harbor string = "https://wonderland-laptop.com"
-        var username string = "admin"
-        var passwd string = "Harbor12345"
-        var repository string = "test/busybox"
-        var url string = harbor + "/service/token?service=harbor-registry&scope=repository:" + repository + ":pull,push"
-        fmt.Println(url)
-
-        req, err := http.NewRequest("GET", url, nil)
-        req.Header.Set("Content-Type", "application/json")
-        req.SetBasicAuth(username, passwd)
-        resp, err := client.Do(req)
-        if err != nil {
-            fmt.Println(err)
-        } 
-
-        defer resp.Body.Close()
-        data, err := ioutil.ReadAll(resp.Body)
-        // bodyString := string(data)
-        // fmt.Println(bodyString)
-
-        if err != nil {
-            fmt.Println(err)
-        }
-
-        if resp.StatusCode != http.StatusOK {
-            fmt.Println("Failed to start GC: %d", resp.StatusCode)
-        }
-        
-        
-        // fmt.Println("success")
-        var harResponse Harbor_Response
-        err = json.Unmarshal(data, &harResponse)
-        if err != nil {
-            fmt.Println(err)
-        }
-        curToken := harResponse.Token
-
-        // curl -i -k -H "Content-Type: application/json" -H "Authorization:  Bearer token" -X GET https://wonderland-laptop/v2/test/busybox/tags/list
-        url = harbor + "/v2/" + repository + "/tags/list"
-        req, err = http.NewRequest("GET", url, nil)
-        req.Header.Set("Content-Type", "application/json")
-        req.Header.Set("Authorization", "Bearer " + curToken)
-        resp, err = client.Do(req)
-        if err != nil {
-            fmt.Println(err)
-        } 
-
-        defer resp.Body.Close()
-        data, err = ioutil.ReadAll(resp.Body)
-        // bodyString = string(data)
-        // fmt.Println(bodyString)
-        var tagList TagList
-        err = json.Unmarshal(data, &tagList)
-        if err != nil {
-            fmt.Println(err)
-        }
-        fmt.Println(tagList.Tags)
-
-        c.JSON(200, gin.H{
+        tt()
+	    c.JSON(200, gin.H{
             "message": "polling success",
+        })
+    })
+
+    r. GET("/webhook", func(c *gin.Context) {
+        webhookSender()
+        c.JSON(200, gin.H{
+            "message": "webhook is sended",
         })
     })
   r.Run(":12345") // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
