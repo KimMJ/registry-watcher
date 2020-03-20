@@ -210,8 +210,22 @@ func CompareJsonFile() {
 	if err != nil {
 		fmt.Println(err)
 	}
+	fmt.Println(imageManifests)
 
-	fmt.Println(PollImage())
+	compareImageManifests := make(ImageManifests)
+	// compareImageManifests["v1-12345"] = make(Manifest)
+	compareImageManifests["v3-12345"] = Manifest{"v3", "12345", "123"}
+	compareImageManifests["v1-54321"] = Manifest{"v1", "54321", "123"}
+
+	for k, v := range compareImageManifests {
+		if _, ok := imageManifests[k]; !ok {
+			fmt.Printf("key[%s] value[%s]\n", k, v)
+		}
+	}
+
+	fmt.Println(compareImageManifests)
+
+	// fmt.Println(PollImage())
 }
 
 func WriteJsonFile() {
@@ -311,7 +325,7 @@ func main() {
 	r.GET("/comparejson", func(c *gin.Context) {
 		CompareJsonFile()
 		c.JSON(200, gin.H{
-			"message": "write json",
+			"message": "compare json",
 		})
 	})
 	r.Run(":12345") // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
