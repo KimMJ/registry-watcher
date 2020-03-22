@@ -32,9 +32,12 @@ func init() {
 
 	for _, webhook := range config.Webhook {
 		for _, dockerRegistry := range webhook.Registries.DockerRegistry {
-			cr.AddFunc("*/5 * * * * *", func() {
-				registry.PollImage(&dockerRegistry)
+			_, err := cr.AddFunc("*/5 * * * * *", func() {
+				registry.PollImage(&dockerRegistry, webhook.EndPoint)
 			})
+			if err != nil {
+				log.Error(err)
+			}
 		}
 	}
 }
@@ -58,7 +61,7 @@ func main() {
 	// for Test
 	r.GET("/poll", func(c *gin.Context) {
 		dockerRegistry := models.DockerRegistry{"wonderland-laptop.com", "admin", "Harbor12345", false, []string{"test/busybox"}}
-		registry.PollImage(&dockerRegistry)
+		registry.PollImage(&dockerRegistry, "http://192.168.8.22:30200/webhooks/webhook/test")
 		c.JSON(200, gin.H{
 			"message": "polling success",
 		})
@@ -91,5 +94,8 @@ func main() {
 			"message": "compare json",
 		})
 	})
-	r.Run(":8888") // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
+	err := r.Run(":8888") // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
+	if err != nil {
+		log.Error(err)
+	}
 }

@@ -59,7 +59,7 @@ func getDigest(registryURL, token, repository, tag string) (string, error) {
 	//fmt.Println(digest)
 }
 
-func PollImage(r *models.DockerRegistry) {
+func PollImage(r *models.DockerRegistry, webhookURL string) {
 	endpoint := r.Endpoint
 	if !strings.Contains(endpoint, "://") {
 		if r.InsecureRegistry {
@@ -119,12 +119,12 @@ func PollImage(r *models.DockerRegistry) {
 			id := hash(tag, digest)
 			imageManifests[id] = imageManifest
 		}
-		compareJSON(r.Endpoint, image, &imageManifests)
+		compareJSON(r.Endpoint, image, &imageManifests, webhookURL)
 		writeJSON(&imageManifests, r.Endpoint, image)
 	}
 }
 
-func compareJSON(endpoint, image string, compare *ImageManifests) {
+func compareJSON(endpoint, image string, compare *ImageManifests, webhookURL string) {
 	var imageManifests ImageManifests
 	readJSON(endpoint, image, &imageManifests)
 
@@ -145,12 +145,12 @@ func compareJSON(endpoint, image string, compare *ImageManifests) {
 				Version:    "v2",
 			}
 			artifact.AddItem(manifests)
-
 		}
 	}
-	webhook.Send("http://192.168.8.22:30200/webhooks/webhook/test", artifact)
 
-	//webhook.WebhookSend("http://10.251.201.165:30200/webhooks/webhook/test", )
+	if len(artifact.Artifacts) > 0 {
+		webhook.Send(webhookURL, artifact)
+	}
 }
 
 func readJSON(endpoint, image string, manifests *ImageManifests) {
