@@ -22,10 +22,15 @@ import (
 // }
 type ImageManifests map[string]models.ImageManifest
 
-func getDigest(registryURL, token, repository, tag string) string {
+func getDigest(registryURL, token, repository, tag string) (string, error) {
 	url := fmt.Sprintf("%s/v2/%s/manifests/%s", registryURL, repository, tag)
 	req, err := http.NewRequest("HEAD", url, nil)
 	// req.Header.Set("Content-Type", "application/json")
+	if err != nil {
+		log.Error(err)
+		return "", err
+	}
+
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 
@@ -34,6 +39,7 @@ func getDigest(registryURL, token, repository, tag string) string {
 	resp, err := c.DoReturnResponse(req)
 	if err != nil {
 		log.Error(err)
+		return "", err
 	}
 
 	//get header
@@ -42,7 +48,7 @@ func getDigest(registryURL, token, repository, tag string) string {
 	// bodyString := string(data)
 	// fmt.Println(bodyString)
 	digest = resp.Header.Get("Docker-Content-Digest")
-	return digest
+	return digest, nil
 	//var digest string
 	//header, err := client.Head(url, &digest)
 	//if err != nil {
@@ -71,7 +77,7 @@ func PollImage(r *models.DockerRegistry) {
 		log.WithFields(log.Fields{
 			"json": r,
 		}).Debug("poll Image")
-		token, err := c.GetToken(endpoint, r.Username, r.Password, repository)
+		token, err := c.GetToken(endpoint, r.Username, r.Password, repository, r.InsecureRegistry)
 		if err != nil {
 			log.Error(err)
 		}
@@ -79,7 +85,7 @@ func PollImage(r *models.DockerRegistry) {
 		log.Debug("get token: ", token)
 
 		var tagList models.TagList
-		data, err := c.GetTag(endpoint, repository, token)
+		data, err := c.GetTag(endpoint, repository, token, r.InsecureRegistry)
 		if err != nil {
 			log.Error(err)
 		}
@@ -96,7 +102,11 @@ func PollImage(r *models.DockerRegistry) {
 		imageManifests := ImageManifests{}
 
 		for _, tag := range tagList.Tags {
-			digest := getDigest(endpoint, token, repository, tag)
+			digest, err := getDigest(endpoint, token, repository, tag)
+			if err != nil {
+				log.Error(err)
+				continue
+			}
 			log.WithFields(log.Fields{
 				"endpoint":   r.Endpoint,
 				"repository": repository,
@@ -127,7 +137,7 @@ func compareJSON(endpoint, image string, compare *ImageManifests) {
 	}
 }
 
-func readJSON(endpoint, image string, manifests *ImageManifests) error {
+func readJSON(endpoint, image string, manifests *ImageManifests) {
 	splited := strings.Split(image, "/")
 	image = splited[len(splited)-1]
 	dir := splited[:len(splited)-1]
@@ -152,11 +162,9 @@ func readJSON(endpoint, image string, manifests *ImageManifests) error {
 	}).Debug("read JSON file")
 
 	*manifests = *imageManifests
-
-	return err
 }
 
-func writeJSON(imageManifests *ImageManifests, endpoint string, image string) error {
+func writeJSON(imageManifests *ImageManifests, endpoint string, image string) {
 	prettyJSON := utils.PrettyPrintJSON(*imageManifests)
 
 	splited := strings.Split(image, "/")
@@ -168,15 +176,12 @@ func writeJSON(imageManifests *ImageManifests, endpoint string, image string) er
 
 	if err != nil {
 		log.Error(err)
-		return err
 	}
 
 	err = ioutil.WriteFile(fmt.Sprintf("%s/%s.json", directory, image), []byte(prettyJSON), 0644)
 	if err != nil {
 		log.Error(err)
-		return err
 	}
-	return nil
 }
 
 func hash(str ...string) string {
