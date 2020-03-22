@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"time"
 
 	//"log"
 	"strings"
@@ -23,9 +24,39 @@ import (
 // }
 type ImageManifests map[string]models.ImageManifest
 
+func getCreationDate(registryURL, token, repository, tag string) (time.Time, error) {
+	url := fmt.Sprintf("%s/v2/%s/manifests/%s", registryURL, repository, tag)
+	req, err := http.NewRequest("GET", url, nil)
+	//req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v1+json")
+	// req.Header.Set("Content-Type", "application/json")
+	if err != nil {
+		log.Error(err)
+		return time.Time{}, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	//req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+
+	c := client.NewClient()
+	resp, err := c.Do(req)
+	if err != nil {
+		log.Error(err)
+		return time.Time{}, err
+	}
+
+	var dockerManifest models.DockerManifest
+	err = json.Unmarshal(resp, &dockerManifest)
+	if err != nil {
+		log.Error(err)
+		return time.Time{}, err
+	}
+
+	return dockerManifest.GetCreationDate(), nil
+}
+
 func getDigest(registryURL, token, repository, tag string) (string, error) {
 	url := fmt.Sprintf("%s/v2/%s/manifests/%s", registryURL, repository, tag)
-	req, err := http.NewRequest("HEAD", url, nil)
+	req, err := http.NewRequest("GET", url, nil)
 	// req.Header.Set("Content-Type", "application/json")
 	if err != nil {
 		log.Error(err)
@@ -33,7 +64,7 @@ func getDigest(registryURL, token, repository, tag string) (string, error) {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+	//req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 
 	c := client.NewClient()
 	var digest string
@@ -104,6 +135,7 @@ func PollImage(r *models.DockerRegistry, webhookURL string) {
 
 		for _, tag := range tagList.Tags {
 			digest, err := getDigest(endpoint, token, repository, tag)
+			creationDate, err := getCreationDate(endpoint, token, repository, tag)
 			if err != nil {
 				log.Error(err)
 				continue
@@ -115,7 +147,7 @@ func PollImage(r *models.DockerRegistry, webhookURL string) {
 				"digest":     digest,
 			}).Debug("got digest")
 
-			imageManifest := models.ImageManifest{tag, digest}
+			imageManifest := models.ImageManifest{tag, digest, creationDate}
 			id := hash(tag, digest)
 			imageManifests[id] = imageManifest
 		}
@@ -125,26 +157,42 @@ func PollImage(r *models.DockerRegistry, webhookURL string) {
 }
 
 func compareJSON(endpoint, image string, compare *ImageManifests, webhookURL string) {
-	var imageManifests ImageManifests
+	imageManifests := ImageManifests{}
 	readJSON(endpoint, image, &imageManifests)
 
 	var artifact models.Artifact
 
+	created := time.Time{}
 	for k, v := range *compare {
+		var dockerArtifact models.DockerArtifact
 		if _, ok := imageManifests[k]; !ok {
+			compareManifest := (*compare)[k]
 			log.WithFields(log.Fields{
 				"key":   k,
 				"value": v,
 			}).Debug("find mismatch")
+			log.WithFields(log.Fields{
+				"oldCreate": created,
+				"newCreate": compareManifest.CreationDate,
+			}).Debug("CreationDate")
 
-			manifests := models.DockerArtifact{
+			if created.Sub(compareManifest.CreationDate).Microseconds() >= 0 {
+				log.Debug("it is not recent image")
+				continue
+			}
+			created = compareManifest.CreationDate
+			log.WithFields(log.Fields{
+				"newCreate": created,
+			}).Debug("date updated")
+
+			dockerArtifact = models.DockerArtifact{
 				CustomKind: false,
-				Reference:  endpoint + "/" + image + ":v2",
+				Reference:  endpoint + "/" + image + ":" + compareManifest.Tag,
 				Name:       endpoint,
 				Type:       "docker/image",
-				Version:    "v2",
+				Version:    compareManifest.Tag,
 			}
-			artifact.AddItem(manifests)
+			artifact.AddItem(dockerArtifact)
 		}
 	}
 
@@ -167,17 +215,15 @@ func readJSON(endpoint, image string, manifests *ImageManifests) {
 	}
 
 	//var imageManifests ImageManifests
-	imageManifests := &ImageManifests{}
-	err = json.Unmarshal(jsonFile, imageManifests)
+
+	err = json.Unmarshal(jsonFile, manifests)
 	if err != nil {
 		log.Error(err)
 	}
 
 	log.WithFields(log.Fields{
-		"json": *imageManifests,
+		"json": *manifests,
 	}).Debug("read JSON file")
-
-	*manifests = *imageManifests
 }
 
 func writeJSON(imageManifests *ImageManifests, endpoint string, image string) {

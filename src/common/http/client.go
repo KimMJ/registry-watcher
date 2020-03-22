@@ -109,16 +109,17 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 	if resp != nil {
 		defer errCheckClose(resp)
 	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, err
+	}
+
 	data, err := ioutil.ReadAll(resp.Body)
 	// bodyString := string(data)
 	// fmt.Println(bodyString)
 
 	if err != nil {
 		log.Error(err)
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
 		return nil, err
 	}
 
