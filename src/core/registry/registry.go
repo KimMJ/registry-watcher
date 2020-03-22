@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/kimmj/registry-watcher/src/common/utils"
+	"github.com/kimmj/registry-watcher/src/core/notification/webhook"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -127,14 +128,29 @@ func compareJSON(endpoint, image string, compare *ImageManifests) {
 	var imageManifests ImageManifests
 	readJSON(endpoint, image, &imageManifests)
 
+	var artifact models.Artifact
+
 	for k, v := range *compare {
 		if _, ok := imageManifests[k]; !ok {
 			log.WithFields(log.Fields{
 				"key":   k,
 				"value": v,
 			}).Debug("find mismatch")
+
+			manifests := models.DockerArtifact{
+				CustomKind: false,
+				Reference:  endpoint + "/" + image + ":v2",
+				Name:       endpoint,
+				Type:       "docker/image",
+				Version:    "v2",
+			}
+			artifact.AddItem(manifests)
+
 		}
 	}
+	webhook.Send("http://192.168.8.22:30200/webhooks/webhook/test", artifact)
+
+	//webhook.WebhookSend("http://10.251.201.165:30200/webhooks/webhook/test", )
 }
 
 func readJSON(endpoint, image string, manifests *ImageManifests) {
