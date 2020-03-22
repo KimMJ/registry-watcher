@@ -10,7 +10,7 @@ type authorizer struct {
 }
 
 // NewAuthorizer return a basic authorizer
-func NewAuthorizer(username, password string) Authorizer {
+func NewAuthorizer(username, password string) *authorizer {
 	return &authorizer{
 		username: username,
 		password: password,

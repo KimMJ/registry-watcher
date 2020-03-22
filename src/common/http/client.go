@@ -20,7 +20,7 @@ type Client struct {
 func NewClient() *Client {
 	client := &Client{}
 
-	transport := &http.Transport{
+	var transport = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		Dial: (&net.Dialer{
 			Timeout:   5 * time.Second,
@@ -54,7 +54,7 @@ func (c *Client) Get(url string, v ...interface{}) error {
 	return json.Unmarshal(data, v[0])
 }
 
-func (c *Client) Head(url string, digest *string) (http.Header, error) {
+func (c *Client) Head(url string) (http.Header, error) {
 	req, err := http.NewRequest("HEAD", url, nil)
 	if err != nil {
 		return nil, err
@@ -92,10 +92,7 @@ func (c *Client) Post(url string, v ...interface{}) error {
 }
 
 func (c *Client) do(req *http.Request) ([]byte, error) {
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
+	resp, err := c.DoReturnResponse(req)
 
 	defer resp.Body.Close()
 	data, err := ioutil.ReadAll(resp.Body)
@@ -115,4 +112,13 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 
 func (c *Client) Do(req *http.Request) ([]byte, error) {
 	return c.do(req)
+}
+
+func (c *Client) DoReturnResponse(req *http.Request) (*http.Response, error) {
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, err
 }

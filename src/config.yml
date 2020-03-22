@@ -10,4 +10,5 @@ webhook:
         insecure-registry: false
         images:
           - "test/busybox"
-    aws: []
+          - "test/nginx"
+#    aws: []

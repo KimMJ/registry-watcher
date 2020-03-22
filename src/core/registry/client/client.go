@@ -2,7 +2,7 @@ package client
 
 import (
 	"encoding/json"
-	"fmt"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 	"strings"
 
@@ -26,6 +26,10 @@ func NewClient() *client {
 	return client
 }
 
+func (c *client) Head(url string, digest *string) (http.Header, error) {
+	return c.client.Head(url, digest)
+}
+
 func (c *client) GetToken(registryURL string, username string, passwd string, repository string) (string, error) {
 
 	var token models.Token
@@ -34,8 +38,9 @@ func (c *client) GetToken(registryURL string, username string, passwd string, re
 		registryURL = "http://" + registryURL
 	}
 
-	var url string = registryURL + "/service/token?service=harbor-registry&scope=repository:" + repository + ":pull,push"
-	fmt.Println(url)
+	url := registryURL + "/service/token?service=harbor-registry&scope=repository:" + repository + ":pull,push"
+	//TODO: Use Header realm
+	log.WithField("url", url).Debug("GetToken url")
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", err
@@ -47,9 +52,13 @@ func (c *client) GetToken(registryURL string, username string, passwd string, re
 	if err != nil {
 		return "", err
 	}
+
+	log.WithFields(log.Fields{
+		"json": string(data),
+	}).Debug("response token")
 	// fmt.Println(data)
-	bodyString := string(data)
-	fmt.Println(bodyString)
+	//bodyString := string(data)
+	//fmt.Println(bodyString)
 	json.Unmarshal(data, &token)
 	curToken := token.GetToken()
 
@@ -57,7 +66,7 @@ func (c *client) GetToken(registryURL string, username string, passwd string, re
 }
 
 func (c *client) GetTag(registryURL, repository, token string) ([]byte, error) {
-	if !strings.Contains(registryURL, "://") { //if insecure-registry
+	if !strings.Contains(registryURL, "://") { //TODO: if insecure-registry
 		registryURL = "http://" + registryURL
 	}
 	url := registryURL + "/v2/" + repository + "/tags/list"
@@ -130,3 +139,15 @@ func (c *client) GetTag(registryURL, repository, token string) ([]byte, error) {
 
 // 	return data, nil
 // }
+func (c *client) Do(req *http.Request) ([]byte, error) {
+	return c.client.Do(req)
+}
+
+func (c *client) DoReturnResponse(req *http.Request) (*http.Response, error) {
+	resp, err := c.client.DoReturnResponse(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, err
+}

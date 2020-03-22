@@ -1,9 +1,9 @@
 package models
 
 type DockerRegistry struct {
-	EndPoint         string
-	UserName         string
-	Password         string
-	InsecureRegistry bool
-	Images           []string
+	Endpoint         string   `yaml:"endpoint"`
+	Username         string   `yaml:"username"`
+	Password         string   `yaml:"password"`
+	InsecureRegistry bool     `yaml:"insecure-registry"`
+	Images           []string `yaml:"images"`
 }
