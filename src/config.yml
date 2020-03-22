@@ -1,0 +1,14 @@
+webhook:
+- name: "local spinnaker"
+  type: "spinnaker"
+  endPoint: "http://something.com"
+  registries:
+    dockerRegistry:
+      - endpoint: "wonderland-laptop.com"
+        username: "admin"
+        password: "Harbor12345"
+        insecure-registry: false
+        images:
+          - "test/busybox"
+          - "test/nginx"
+#    aws: []
