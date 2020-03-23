@@ -3,12 +3,13 @@ package registry
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/kimmj/registry-watcher/src/common/utils"
-	"github.com/kimmj/registry-watcher/src/core/notification/webhook"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/kimmj/registry-watcher/src/common/utils"
+	"github.com/kimmj/registry-watcher/src/core/notification/webhook"
 
 	//"log"
 	"strings"
@@ -90,81 +91,92 @@ func getDigest(registryURL, token, repository, tag string) (string, error) {
 	//fmt.Println(digest)
 }
 
-func PollImage(r *models.DockerRegistry, webhookURL string) {
-	endpoint := r.Endpoint
-	if !strings.Contains(endpoint, "://") {
-		if r.InsecureRegistry {
-			endpoint = "http://" + endpoint
-		} else {
-			endpoint = "https://" + endpoint
+func PollImage(registries models.Registries, webhookURL string) {
+	var artifact models.Artifact
+	for _, r := range registries.DockerRegistry {
+		fmt.Printf("polling: %+v\n", r)
+		endpoint := r.Endpoint
+
+		if !strings.Contains(endpoint, "://") {
+			if r.InsecureRegistry {
+				endpoint = "http://" + endpoint
+			} else {
+				endpoint = "https://" + endpoint
+			}
 		}
-	}
-	//type empty {}
+		log.WithField("endpoint", endpoint).Debug("polling image")
+		//type empty {}
 
-	//sem := make(chan empty, N)
-	c := client.NewClient()
-	for _, image := range r.Images {
-		repository := image
+		//sem := make(chan empty, N)
+		c := client.NewClient()
+		for _, image := range r.Images {
+			repository := image
 
-		log.WithFields(log.Fields{
-			"json": r,
-		}).Debug("poll Image")
-		token, err := c.GetToken(endpoint, r.Username, r.Password, repository, r.InsecureRegistry)
-		if err != nil {
-			log.Error(err)
-		}
-
-		log.Debug("get token: ", token)
-
-		var tagList models.TagList
-		data, err := c.GetTag(endpoint, repository, token, r.InsecureRegistry)
-		if err != nil {
-			log.Error(err)
-		}
-
-		err = json.Unmarshal(data, &tagList)
-		if err != nil {
-			log.Error(err)
-		}
-
-		log.WithFields(log.Fields{
-			"tags": tagList.Tags,
-		}).Debug("got tags")
-
-		imageManifests := ImageManifests{}
-
-		for _, tag := range tagList.Tags {
-			digest, err := getDigest(endpoint, token, repository, tag)
-			creationDate, err := getCreationDate(endpoint, token, repository, tag)
+			log.WithFields(log.Fields{
+				"json": r,
+			}).Debug("poll Image")
+			token, err := c.GetToken(endpoint, r.Username, r.Password, repository, r.InsecureRegistry)
 			if err != nil {
 				log.Error(err)
-				continue
 			}
-			log.WithFields(log.Fields{
-				"endpoint":   r.Endpoint,
-				"repository": repository,
-				"tag":        tag,
-				"digest":     digest,
-			}).Debug("got digest")
 
-			imageManifest := models.ImageManifest{tag, digest, creationDate}
-			id := hash(tag, digest)
-			imageManifests[id] = imageManifest
+			log.Debug("get token: ", token)
+
+			var tagList models.TagList
+			data, err := c.GetTag(endpoint, repository, token, r.InsecureRegistry)
+			if err != nil {
+				log.Error(err)
+			}
+
+			err = json.Unmarshal(data, &tagList)
+			if err != nil {
+				log.Error(err)
+			}
+
+			log.WithFields(log.Fields{
+				"tags": tagList.Tags,
+			}).Debug("got tags")
+
+			imageManifests := ImageManifests{}
+
+			for _, tag := range tagList.Tags {
+				digest, err := getDigest(endpoint, token, repository, tag)
+				creationDate, err := getCreationDate(endpoint, token, repository, tag)
+				if err != nil {
+					log.Error(err)
+					continue
+				}
+				log.WithFields(log.Fields{
+					"endpoint":   r.Endpoint,
+					"repository": repository,
+					"tag":        tag,
+					"digest":     digest,
+				}).Debug("got digest")
+
+				imageManifest := models.ImageManifest{tag, digest, creationDate}
+				id := hash(tag, digest)
+				imageManifests[id] = imageManifest
+			}
+
+			compareJSON(r.Endpoint, image, &imageManifests, webhookURL, &artifact)
+			writeJSON(&imageManifests, r.Endpoint, image)
 		}
-		compareJSON(r.Endpoint, image, &imageManifests, webhookURL)
-		writeJSON(&imageManifests, r.Endpoint, image)
+	}
+
+	if len(artifact.Artifacts) > 0 {
+		webhook.Send(webhookURL, artifact)
 	}
 }
 
-func compareJSON(endpoint, image string, compare *ImageManifests, webhookURL string) {
+func compareJSON(endpoint, image string, compare *ImageManifests, webhookURL string, artifact *models.Artifact) {
 	imageManifests := ImageManifests{}
 	readJSON(endpoint, image, &imageManifests)
 
-	var artifact models.Artifact
+	// var artifact models.Artifact
 
 	created := time.Time{}
+	var dockerArtifact models.DockerArtifact
 	for k, v := range *compare {
-		var dockerArtifact models.DockerArtifact
 		if _, ok := imageManifests[k]; !ok {
 			compareManifest := (*compare)[k]
 			log.WithFields(log.Fields{
@@ -188,16 +200,16 @@ func compareJSON(endpoint, image string, compare *ImageManifests, webhookURL str
 			dockerArtifact = models.DockerArtifact{
 				CustomKind: false,
 				Reference:  endpoint + "/" + image + ":" + compareManifest.Tag,
-				Name:       endpoint,
+				Name:       endpoint + "/" + image,
 				Type:       "docker/image",
 				Version:    compareManifest.Tag,
 			}
-			artifact.AddItem(dockerArtifact)
+
 		}
 	}
-
-	if len(artifact.Artifacts) > 0 {
-		webhook.Send(webhookURL, artifact)
+	tmp := time.Time{}
+	if created != tmp {
+		(*artifact).AddItem(dockerArtifact)
 	}
 }
 

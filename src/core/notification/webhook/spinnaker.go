@@ -3,6 +3,7 @@ package webhook
 import (
 	"bytes"
 	"encoding/json"
+
 	"github.com/kimmj/registry-watcher/src/common/http"
 	"github.com/kimmj/registry-watcher/src/common/models"
 	log "github.com/sirupsen/logrus"
@@ -33,7 +34,7 @@ func Send(targetURL string, artifact models.Artifact) {
 
 	//fmt.Println(buff)
 	log.WithFields(log.Fields{
-		"response": pbytes,
+		"response": string(pbytes),
 	}).Debug("webhook sended")
 
 	//req, err := http.NewRequest("POST", spinnakerUrl, buff)

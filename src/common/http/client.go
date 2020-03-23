@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type Client struct {
@@ -95,7 +96,10 @@ func (c *Client) Post(url string, v ...interface{}) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	_, err = c.do(req)
+	resp, err := c.do(req)
+	log.WithFields(log.Fields{
+		"resp": string(resp),
+	}).Debug("post sended")
 	return err
 }
 
