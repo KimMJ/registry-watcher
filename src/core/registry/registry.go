@@ -28,15 +28,13 @@ type ImageManifests map[string]models.ImageManifest
 func getCreationDate(registryURL, token, repository, tag string) (time.Time, error) {
 	url := fmt.Sprintf("%s/v2/%s/manifests/%s", registryURL, repository, tag)
 	req, err := http.NewRequest("GET", url, nil)
-	//req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v1+json")
-	// req.Header.Set("Content-Type", "application/json")
+
 	if err != nil {
 		log.Error(err)
 		return time.Time{}, err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
-	//req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 
 	c := client.NewClient()
 	resp, err := c.Do(req)
@@ -58,14 +56,12 @@ func getCreationDate(registryURL, token, repository, tag string) (time.Time, err
 func getDigest(registryURL, token, repository, tag string) (string, error) {
 	url := fmt.Sprintf("%s/v2/%s/manifests/%s", registryURL, repository, tag)
 	req, err := http.NewRequest("GET", url, nil)
-	// req.Header.Set("Content-Type", "application/json")
 	if err != nil {
 		log.Error(err)
 		return "", err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
-	//req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 
 	c := client.NewClient()
 	var digest string
@@ -105,9 +101,7 @@ func PollImage(registries models.Registries, webhookURL string) {
 			}
 		}
 		log.WithField("endpoint", endpoint).Debug("polling image")
-		//type empty {}
 
-		//sem := make(chan empty, N)
 		c := client.NewClient()
 		for _, image := range r.Images {
 			repository := image
@@ -158,7 +152,7 @@ func PollImage(registries models.Registries, webhookURL string) {
 				imageManifests[id] = imageManifest
 			}
 
-			compareJSON(r.Endpoint, image, &imageManifests, webhookURL, &artifact)
+			compareJSON(r.Endpoint, image, &imageManifests, &artifact)
 			writeJSON(&imageManifests, r.Endpoint, image)
 		}
 	}
@@ -168,11 +162,9 @@ func PollImage(registries models.Registries, webhookURL string) {
 	}
 }
 
-func compareJSON(endpoint, image string, compare *ImageManifests, webhookURL string, artifact *models.Artifact) {
+func compareJSON(endpoint, image string, compare *ImageManifests, artifact *models.Artifact) {
 	imageManifests := ImageManifests{}
 	readJSON(endpoint, image, &imageManifests)
-
-	// var artifact models.Artifact
 
 	created := time.Time{}
 	var dockerArtifact models.DockerArtifact
@@ -225,8 +217,6 @@ func readJSON(endpoint, image string, manifests *ImageManifests) {
 	if err != nil {
 		log.Error(err)
 	}
-
-	//var imageManifests ImageManifests
 
 	err = json.Unmarshal(jsonFile, manifests)
 	if err != nil {

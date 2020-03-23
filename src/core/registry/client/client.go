@@ -16,7 +16,6 @@ type Client interface {
 }
 
 type client struct {
-	// baseURL string
 	client *commonHttp.Client
 }
 

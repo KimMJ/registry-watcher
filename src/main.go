@@ -78,34 +78,6 @@ func main() {
 		})
 	})
 
-	r.GET("/webhook", func(c *gin.Context) {
-		// WebhookSender()
-		c.JSON(200, gin.H{
-			"message": "webhook is sended",
-		})
-	})
-
-	r.GET("/readjson", func(c *gin.Context) {
-		// ReadJsonFile()
-		c.JSON(200, gin.H{
-			"message": "read json",
-		})
-	})
-
-	r.GET("/writejson", func(c *gin.Context) {
-		// WriteJsonFile()
-		c.JSON(200, gin.H{
-			"message": "write json",
-		})
-	})
-
-	r.GET("/comparejson", func(c *gin.Context) {
-		// CompareJsonFile()
-		c.JSON(200, gin.H{
-			"message": "compare json",
-		})
-	})
-
 	err := r.Run(":8888") // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 	if err != nil {
 		log.Error(err)

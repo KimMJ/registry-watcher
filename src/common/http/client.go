@@ -119,8 +119,6 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 	}
 
 	data, err := ioutil.ReadAll(resp.Body)
-	// bodyString := string(data)
-	// fmt.Println(bodyString)
 
 	if err != nil {
 		log.Error(err)

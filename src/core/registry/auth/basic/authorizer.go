@@ -9,7 +9,6 @@ type authorizer struct {
 	password string
 }
 
-// NewAuthorizer return a basic authorizer
 func NewAuthorizer(username, password string) *authorizer {
 	return &authorizer{
 		username: username,
