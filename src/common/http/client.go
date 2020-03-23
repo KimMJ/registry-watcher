@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type Client struct {
@@ -22,10 +24,10 @@ func NewClient() *Client {
 
 	var transport = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		Dial: (&net.Dialer{
+		DialContext: (&net.Dialer{
 			Timeout:   5 * time.Second,
 			KeepAlive: 5 * time.Second,
-		}).Dial,
+		}).DialContext,
 		TLSHandshakeTimeout:   5 * time.Second,
 		ResponseHeaderTimeout: 5 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
@@ -39,15 +41,18 @@ func (c *Client) Get(url string, v ...interface{}) error {
 	req, err := http.NewRequest("GET", url, nil)
 
 	if err != nil {
+		log.Error(err)
 		return err
 	}
 
 	data, err := c.do(req)
 	if err != nil {
+		log.Error(err)
 		return err
 	}
 
 	if len(v) == 0 {
+		log.Error(err)
 		return nil
 	}
 
@@ -57,10 +62,12 @@ func (c *Client) Get(url string, v ...interface{}) error {
 func (c *Client) Head(url string) (http.Header, error) {
 	req, err := http.NewRequest("HEAD", url, nil)
 	if err != nil {
+		log.Error(err)
 		return nil, err
 	}
 	resp, err := c.client.Do(req)
 	if err != nil {
+		log.Error(err)
 		return nil, err
 	}
 
@@ -75,6 +82,8 @@ func (c *Client) Post(url string, v ...interface{}) error {
 		} else {
 			data, err := json.Marshal(v[0])
 			if err != nil {
+				log.Error(err)
+
 				return err
 			}
 
@@ -87,23 +96,32 @@ func (c *Client) Post(url string, v ...interface{}) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	_, err = c.do(req)
+	resp, err := c.do(req)
+	log.WithFields(log.Fields{
+		"resp": string(resp),
+	}).Debug("post sended")
 	return err
 }
 
 func (c *Client) do(req *http.Request) ([]byte, error) {
 	resp, err := c.DoReturnResponse(req)
-
-	defer resp.Body.Close()
-	data, err := ioutil.ReadAll(resp.Body)
-	// bodyString := string(data)
-	// fmt.Println(bodyString)
-
 	if err != nil {
+		log.Error(err)
 		return nil, err
 	}
 
+	if resp != nil {
+		defer errCheckClose(resp)
+	}
+
 	if resp.StatusCode != http.StatusOK {
+		return nil, err
+	}
+
+	data, err := ioutil.ReadAll(resp.Body)
+
+	if err != nil {
+		log.Error(err)
 		return nil, err
 	}
 
@@ -117,8 +135,16 @@ func (c *Client) Do(req *http.Request) ([]byte, error) {
 func (c *Client) DoReturnResponse(req *http.Request) (*http.Response, error) {
 	resp, err := c.client.Do(req)
 	if err != nil {
+		log.Error(err)
 		return nil, err
 	}
 
 	return resp, err
+}
+
+func errCheckClose(resp *http.Response) {
+	err := resp.Body.Close()
+	if err != nil {
+		log.Error(err)
+	}
 }

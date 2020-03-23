@@ -1,7 +1,7 @@
 webhook:
 - name: "local spinnaker"
   type: "spinnaker"
-  endPoint: "http://something.com"
+  endPoint: "http://192.168.8.22:30200/webhooks/webhook/test"
   registries:
     dockerRegistry:
       - endpoint: "wonderland-laptop.com"

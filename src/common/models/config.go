@@ -20,15 +20,9 @@ func (c *Config) ReadConfig(filepath string) error {
 		return err
 	}
 	err = yaml.Unmarshal(yamlFile, &c)
-	//bodyString := string(yamlFile)
-	//fmt.Println(bodyString)
-	//fmt.Printf("%+v\n",c)
-	//s, _ := json.MarshalIndent(c, "", "\t")
-	//fmt.Println(string(s))
 	if err != nil {
 		log.Fatalf("Unmarshal: %v", err)
 		return err
 	}
-	//fmt.Println(config)
 	return err
 }
