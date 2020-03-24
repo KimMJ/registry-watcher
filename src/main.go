@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
+	"github.com/kimmj/registry-watcher/src/common/http"
 	"github.com/kimmj/registry-watcher/src/common/models"
 	"github.com/kimmj/registry-watcher/src/core/registry"
 	cron "github.com/robfig/cron/v3"
@@ -11,8 +12,10 @@ import (
 )
 
 var (
-	cr     *cron.Cron
-	config models.Config
+	cr           *cron.Cron
+	config       models.Config
+	test         models.Registries
+	testEndpoint string
 )
 
 func Init() {
@@ -31,7 +34,6 @@ func Init() {
 	}).Debug("load config")
 
 	cr = cron.New(cron.WithSeconds())
-
 	for j, webhook := range config.Webhook {
 		// for i, dockerRegistry := range webhook.Registries.DockerRegistry {
 		log.WithFields(log.Fields{
@@ -39,9 +41,10 @@ func Init() {
 			"dockerRegistry": fmt.Sprintf("%+v", config.Webhook[j].Registries),
 		}).Debug("cron added")
 
-		tmp := config.Webhook[j].Registries
+		test = config.Webhook[j].Registries
+		testEndpoint = webhook.EndPoint
 		_, err := cr.AddFunc("*/30 * * * * *", func() {
-			registry.PollImage(tmp, webhook.EndPoint)
+			registry.PollImage(test, webhook.EndPoint)
 		})
 
 		if err != nil {
@@ -50,6 +53,7 @@ func Init() {
 
 		// }
 	}
+	http.InitSema()
 }
 
 func main() {
@@ -71,8 +75,7 @@ func main() {
 
 	// for Test
 	r.GET("/poll", func(c *gin.Context) {
-		// dockerRegistry := models.DockerRegistry{"wonderland-laptop.com", "admin", "Harbor12345", false, []string{"test/busybox"}}
-		// registry.PollImage(dockerRegistry, "http://192.168.8.22:30200/webhooks/webhook/test")
+		registry.PollImage(test, testEndpoint)
 		c.JSON(200, gin.H{
 			"message": "polling success",
 		})

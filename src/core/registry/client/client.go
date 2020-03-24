@@ -16,6 +16,7 @@ type Client interface {
 }
 
 type client struct {
+	// baseURL string
 	client *commonHttp.Client
 }
 
@@ -38,6 +39,7 @@ func (c *client) getAPIEndpoint(endpoint string, repository string) (string, err
 	}
 
 	resp, err := c.DoReturnResponse(req)
+	defer resp.Body.Close()
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -47,6 +49,7 @@ func (c *client) getAPIEndpoint(endpoint string, repository string) (string, err
 	splited := strings.Split(auth, "\"")
 	realm := splited[1]
 	service := splited[3]
+	resp.Body.Close()
 	return fmt.Sprintf("%s?service=%s&scope=repository:%s:pull", realm, service, repository), nil
 }
 

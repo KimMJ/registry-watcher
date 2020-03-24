@@ -19,6 +19,16 @@ type Client struct {
 	password string
 }
 
+const (
+	semaLimit = 100
+)
+
+var Sema chan struct{}
+
+func InitSema() {
+	Sema = make(chan struct{}, semaLimit)
+}
+
 func NewClient() *Client {
 	client := &Client{}
 
@@ -119,17 +129,26 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 	}
 
 	data, err := ioutil.ReadAll(resp.Body)
+	// bodyString := string(data)
+	// fmt.Println(bodyString)
 
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
-
+	resp.Body.Close()
 	return data, nil
 }
 
 func (c *Client) Do(req *http.Request) ([]byte, error) {
-	return c.do(req)
+	Sema <- struct{}{}
+	ret, err := c.do(req)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	<-Sema
+	return ret, nil
 }
 
 func (c *Client) DoReturnResponse(req *http.Request) (*http.Response, error) {
