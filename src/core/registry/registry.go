@@ -177,7 +177,7 @@ func PollImage(registries models.Registries, webhookURL string) {
 			wg.Wait()
 			// fmt.Println("wait done!")
 			// time.Sleep(10 * time.Second)
-			compareJSON(r.Endpoint, image, &imageManifests, webhookURL, &artifact)
+			compareJSON(r.Endpoint, image, &imageManifests, &artifact)
 			writeJSON(&imageManifests, r.Endpoint, image)
 		}
 	}
@@ -187,7 +187,7 @@ func PollImage(registries models.Registries, webhookURL string) {
 	}
 }
 
-func compareJSON(endpoint, image string, compare *ImageManifests, webhookURL string, artifact *models.Artifact) {
+func compareJSON(endpoint, image string, compare *ImageManifests, artifact *models.Artifact) {
 	imageManifests := ImageManifests{}
 	readJSON(endpoint, image, &imageManifests)
 
@@ -236,7 +236,12 @@ func readJSON(endpoint, image string, manifests *ImageManifests) {
 	splited := strings.Split(image, "/")
 	image = splited[len(splited)-1]
 	dir := splited[:len(splited)-1]
-	directory := fmt.Sprintf("db/%s/%s", endpoint, strings.Join(dir, "/"))
+	var directory string
+	if len(dir) == 0 {
+		directory = fmt.Sprintf("db/%s", endpoint)
+	} else {
+		directory = fmt.Sprintf("db/%s/%s", endpoint, strings.Join(dir, "/"))
+	}
 	filePath := fmt.Sprintf("%s/%s.json", directory, image)
 
 	jsonFile, err := ioutil.ReadFile(filePath)
@@ -263,8 +268,12 @@ func writeJSON(imageManifests *ImageManifests, endpoint string, image string) {
 	splited := strings.Split(image, "/")
 	image = splited[len(splited)-1]
 	dir := splited[:len(splited)-1]
-
-	directory := fmt.Sprintf("db/%s/%s", endpoint, strings.Join(dir, "/"))
+	var directory string
+	if len(dir) == 0 {
+		directory = fmt.Sprintf("db/%s", endpoint)
+	} else {
+		directory = fmt.Sprintf("db/%s/%s", endpoint, strings.Join(dir, "/"))
+	}
 	err := os.MkdirAll(directory, os.ModePerm)
 
 	if err != nil {

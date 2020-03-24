@@ -24,7 +24,7 @@ func Init() {
 
 	// read config file
 	config = models.Config{}
-	err := config.ReadConfig("config.yml")
+	err := config.ReadConfig("src/config.yml")
 	if err != nil {
 		log.Println("Read config file got err")
 	}

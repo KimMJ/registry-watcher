@@ -20,7 +20,7 @@ type Client struct {
 }
 
 const (
-	semaLimit = 100
+	semaLimit = 500
 )
 
 var Sema chan struct{}
@@ -136,7 +136,7 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 		log.Error(err)
 		return nil, err
 	}
-	resp.Body.Close()
+
 	return data, nil
 }
 
