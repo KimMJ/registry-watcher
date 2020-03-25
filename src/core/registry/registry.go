@@ -3,9 +3,11 @@ package registry
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/kimmj/registry-watcher/src/common/utils"
@@ -28,23 +30,28 @@ type ImageManifests map[string]models.ImageManifest
 func getCreationDate(registryURL, token, repository, tag string) (time.Time, error) {
 	url := fmt.Sprintf("%s/v2/%s/manifests/%s", registryURL, repository, tag)
 	req, err := http.NewRequest("GET", url, nil)
-
+	//req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v1+json")
+	// req.Header.Set("Content-Type", "application/json")
 	if err != nil {
 		log.Error(err)
 		return time.Time{}, err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
+	//req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 
 	c := client.NewClient()
-	resp, err := c.Do(req)
+	resp, err := c.Client.Client.Do(req)
 	if err != nil {
 		log.Error(err)
 		return time.Time{}, err
 	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
 
 	var dockerManifest models.DockerManifest
-	err = json.Unmarshal(resp, &dockerManifest)
+	err = json.Unmarshal(data, &dockerManifest)
 	if err != nil {
 		log.Error(err)
 		return time.Time{}, err
@@ -56,35 +63,30 @@ func getCreationDate(registryURL, token, repository, tag string) (time.Time, err
 func getDigest(registryURL, token, repository, tag string) (string, error) {
 	url := fmt.Sprintf("%s/v2/%s/manifests/%s", registryURL, repository, tag)
 	req, err := http.NewRequest("GET", url, nil)
+	// req.Header.Set("Content-Type", "application/json")
 	if err != nil {
 		log.Error(err)
 		return "", err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
+	//req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 
 	c := client.NewClient()
 	var digest string
-	resp, err := c.DoReturnResponse(req)
+	resp, err := c.Client.Client.Do(req)
+
 	if err != nil {
 		log.Error(err)
 		return "", err
 	}
 
-	//get header
-	//defer resp.Body.Close()
-	//data, err = ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	io.Copy(ioutil.Discard, resp.Body)
 	// bodyString := string(data)
 	// fmt.Println(bodyString)
 	digest = resp.Header.Get("Docker-Content-Digest")
 	return digest, nil
-	//var digest string
-	//header, err := client.Head(url, &digest)
-	//if err != nil {
-	//	log.Error(err)
-	//}
-	//fmt.Println(header)
-	//fmt.Println(digest)
 }
 
 func PollImage(registries models.Registries, webhookURL string) {
@@ -101,7 +103,9 @@ func PollImage(registries models.Registries, webhookURL string) {
 			}
 		}
 		log.WithField("endpoint", endpoint).Debug("polling image")
+		//type empty {}
 
+		//sem := make(chan empty, N)
 		c := client.NewClient()
 		for _, image := range r.Images {
 			repository := image
@@ -133,25 +137,42 @@ func PollImage(registries models.Registries, webhookURL string) {
 
 			imageManifests := ImageManifests{}
 
-			for _, tag := range tagList.Tags {
-				digest, err := getDigest(endpoint, token, repository, tag)
-				creationDate, err := getCreationDate(endpoint, token, repository, tag)
-				if err != nil {
-					log.Error(err)
-					continue
-				}
-				log.WithFields(log.Fields{
-					"endpoint":   r.Endpoint,
-					"repository": repository,
-					"tag":        tag,
-					"digest":     digest,
-				}).Debug("got digest")
+			semaLimit := 1
+			sema := make(chan struct{}, semaLimit)
 
-				imageManifest := models.ImageManifest{tag, digest, creationDate}
-				id := hash(tag, digest)
-				imageManifests[id] = imageManifest
+			sliceLength := len(tagList.Tags)
+			var wg sync.WaitGroup
+
+			for i := 0; i < sliceLength; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					digest, err := getDigest(endpoint, token, repository, tagList.Tags[i])
+					creationDate, err := getCreationDate(endpoint, token, repository, tagList.Tags[i])
+					//digest := "tmp"
+					//creationDate := time.Time{}
+					if err != nil {
+						log.Error(err)
+						return
+					}
+					log.WithFields(log.Fields{
+						"endpoint":   r.Endpoint,
+						"repository": repository,
+						"tag":        tagList.Tags[i],
+						"digest":     digest,
+					}).Debug("got digest")
+
+					imageManifest := models.ImageManifest{tagList.Tags[i], digest, creationDate}
+					id := hash(tagList.Tags[i], digest)
+					sema <- struct{}{}
+					imageManifests[id] = imageManifest //concurrency
+					<-sema
+					return
+				}(i)
 			}
-
+			wg.Wait()
+			// fmt.Println("wait done!")
+			// time.Sleep(10 * time.Second)
 			compareJSON(r.Endpoint, image, &imageManifests, &artifact)
 			writeJSON(&imageManifests, r.Endpoint, image)
 		}
@@ -165,6 +186,8 @@ func PollImage(registries models.Registries, webhookURL string) {
 func compareJSON(endpoint, image string, compare *ImageManifests, artifact *models.Artifact) {
 	imageManifests := ImageManifests{}
 	readJSON(endpoint, image, &imageManifests)
+
+	// var artifact models.Artifact
 
 	created := time.Time{}
 	var dockerArtifact models.DockerArtifact
@@ -209,7 +232,12 @@ func readJSON(endpoint, image string, manifests *ImageManifests) {
 	splited := strings.Split(image, "/")
 	image = splited[len(splited)-1]
 	dir := splited[:len(splited)-1]
-	directory := fmt.Sprintf("db/%s/%s", endpoint, strings.Join(dir, "/"))
+	var directory string
+	if len(dir) == 0 {
+		directory = fmt.Sprintf("db/%s", endpoint)
+	} else {
+		directory = fmt.Sprintf("db/%s/%s", endpoint, strings.Join(dir, "/"))
+	}
 	filePath := fmt.Sprintf("%s/%s.json", directory, image)
 
 	jsonFile, err := ioutil.ReadFile(filePath)
@@ -217,6 +245,8 @@ func readJSON(endpoint, image string, manifests *ImageManifests) {
 	if err != nil {
 		log.Error(err)
 	}
+
+	//var imageManifests ImageManifests
 
 	err = json.Unmarshal(jsonFile, manifests)
 	if err != nil {
@@ -234,8 +264,12 @@ func writeJSON(imageManifests *ImageManifests, endpoint string, image string) {
 	splited := strings.Split(image, "/")
 	image = splited[len(splited)-1]
 	dir := splited[:len(splited)-1]
-
-	directory := fmt.Sprintf("db/%s/%s", endpoint, strings.Join(dir, "/"))
+	var directory string
+	if len(dir) == 0 {
+		directory = fmt.Sprintf("db/%s", endpoint)
+	} else {
+		directory = fmt.Sprintf("db/%s/%s", endpoint, strings.Join(dir, "/"))
+	}
 	err := os.MkdirAll(directory, os.ModePerm)
 
 	if err != nil {

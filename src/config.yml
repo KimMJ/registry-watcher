@@ -4,11 +4,33 @@ webhook:
   endPoint: "http://192.168.8.22:30200/webhooks/webhook/test"
   registries:
     dockerRegistry:
-      - endpoint: "wonderland-laptop.com"
-        username: "admin"
-        password: "Harbor12345"
+#      - endpoint: "wonderland-laptop.com"
+#        username: "admin"
+#        password: "Harbor12345"
+#        insecure-registry: false
+#        images:
+#          - "test/busybox"
+#          - "test/nginx"
+      - endpoint: "registry-1.docker.io"
+        username: "kimmj"
+        password: "Software!1"
         insecure-registry: false
         images:
-          - "test/busybox"
-          - "test/nginx"
-#    aws: []
+          - "library/busybox"
+          - "library/jenkins"
+          - "library/ubuntu"
+          - "library/linux"
+          - "library/alpine"
+#          - "jenkins"
+#- name: "second spinnaker"
+#  type: "spinnaker"
+#  endPoint: "http://192.168.8.22:30200/webhooks/webhook/test"
+#  registries:
+#    dockerRegistry:
+#      - endpoint: "wonderland-laptop.com"
+#        username: "admin"
+#        password: "Harbor12345"
+#        insecure-registry: false
+#        images:
+#          - "test/busybox"
+#          - "test/nginx"

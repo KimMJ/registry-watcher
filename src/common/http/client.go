@@ -4,19 +4,28 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type Client struct {
-	client   *http.Client
+	Client   *http.Client
 	username string
 	password string
+}
+
+const (
+	semaLimit = 2000
+)
+
+var Sema chan struct{}
+
+func InitSema() {
+	Sema = make(chan struct{}, semaLimit)
 }
 
 func NewClient() *Client {
@@ -32,7 +41,7 @@ func NewClient() *Client {
 		ResponseHeaderTimeout: 5 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
-	client.client = &http.Client{Transport: transport}
+	client.Client = &http.Client{Transport: transport}
 
 	return client
 }
@@ -65,12 +74,12 @@ func (c *Client) Head(url string) (http.Header, error) {
 		log.Error(err)
 		return nil, err
 	}
-	resp, err := c.client.Do(req)
+	resp, err := c.Client.Do(req)
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
-
+	defer resp.Body.Close()
 	return resp.Header, nil
 }
 
@@ -104,21 +113,16 @@ func (c *Client) Post(url string, v ...interface{}) error {
 }
 
 func (c *Client) do(req *http.Request) ([]byte, error) {
-	resp, err := c.DoReturnResponse(req)
+	resp, err := c.Client.Do(req)
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
-
-	if resp != nil {
-		defer errCheckClose(resp)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, err
-	}
+	defer resp.Body.Close()
 
 	data, err := ioutil.ReadAll(resp.Body)
+	// bodyString := string(data)
+	// fmt.Println(bodyString)
 
 	if err != nil {
 		log.Error(err)
@@ -129,22 +133,12 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 }
 
 func (c *Client) Do(req *http.Request) ([]byte, error) {
-	return c.do(req)
-}
-
-func (c *Client) DoReturnResponse(req *http.Request) (*http.Response, error) {
-	resp, err := c.client.Do(req)
+	Sema <- struct{}{}
+	ret, err := c.do(req)
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
-
-	return resp, err
-}
-
-func errCheckClose(resp *http.Response) {
-	err := resp.Body.Close()
-	if err != nil {
-		log.Error(err)
-	}
+	<-Sema
+	return ret, nil
 }
