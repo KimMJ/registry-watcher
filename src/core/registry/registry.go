@@ -3,6 +3,7 @@ package registry
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -40,14 +41,17 @@ func getCreationDate(registryURL, token, repository, tag string) (time.Time, err
 	//req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 
 	c := client.NewClient()
-	resp, err := c.Do(req)
+	resp, err := c.Client.Client.Do(req)
 	if err != nil {
 		log.Error(err)
 		return time.Time{}, err
 	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
 
 	var dockerManifest models.DockerManifest
-	err = json.Unmarshal(resp, &dockerManifest)
+	err = json.Unmarshal(data, &dockerManifest)
 	if err != nil {
 		log.Error(err)
 		return time.Time{}, err
@@ -70,27 +74,19 @@ func getDigest(registryURL, token, repository, tag string) (string, error) {
 
 	c := client.NewClient()
 	var digest string
-	resp, err := c.DoReturnResponse(req)
-	defer resp.Body.Close()
+	resp, err := c.Client.Client.Do(req)
+
 	if err != nil {
 		log.Error(err)
 		return "", err
 	}
 
-	//get header
-	//defer resp.Body.Close()
-	//data, err = ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	io.Copy(ioutil.Discard, resp.Body)
 	// bodyString := string(data)
 	// fmt.Println(bodyString)
 	digest = resp.Header.Get("Docker-Content-Digest")
 	return digest, nil
-	//var digest string
-	//header, err := client.Head(url, &digest)
-	//if err != nil {
-	//	log.Error(err)
-	//}
-	//fmt.Println(header)
-	//fmt.Println(digest)
 }
 
 func PollImage(registries models.Registries, webhookURL string) {
@@ -147,15 +143,14 @@ func PollImage(registries models.Registries, webhookURL string) {
 			sliceLength := len(tagList.Tags)
 			var wg sync.WaitGroup
 
-			// for i, _ := range tagList.Tags {
 			for i := 0; i < sliceLength; i++ {
 				wg.Add(1)
 				go func(i int) {
 					defer wg.Done()
 					digest, err := getDigest(endpoint, token, repository, tagList.Tags[i])
 					creationDate, err := getCreationDate(endpoint, token, repository, tagList.Tags[i])
-					// digest := "tmp"
-					// creationDate := time.Time{}
+					//digest := "tmp"
+					//creationDate := time.Time{}
 					if err != nil {
 						log.Error(err)
 						return
@@ -172,6 +167,7 @@ func PollImage(registries models.Registries, webhookURL string) {
 					sema <- struct{}{}
 					imageManifests[id] = imageManifest //concurrency
 					<-sema
+					return
 				}(i)
 			}
 			wg.Wait()

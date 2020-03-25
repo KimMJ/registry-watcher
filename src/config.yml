@@ -19,6 +19,8 @@ webhook:
           - "library/busybox"
           - "library/jenkins"
           - "library/ubuntu"
+          - "library/linux"
+          - "library/alpine"
 #          - "jenkins"
 #- name: "second spinnaker"
 #  type: "spinnaker"

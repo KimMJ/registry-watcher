@@ -17,18 +17,18 @@ type Client interface {
 
 type client struct {
 	// baseURL string
-	client *commonHttp.Client
+	Client *commonHttp.Client
 }
 
 func NewClient() *client {
 	client := &client{
-		client: commonHttp.NewClient(),
+		Client: commonHttp.NewClient(),
 	}
 	return client
 }
 
 func (c *client) Head(url string) (http.Header, error) {
-	return c.client.Head(url)
+	return c.Client.Head(url)
 }
 
 func (c *client) getAPIEndpoint(endpoint string, repository string) (string, error) {
@@ -38,8 +38,7 @@ func (c *client) getAPIEndpoint(endpoint string, repository string) (string, err
 		return "", err
 	}
 
-	resp, err := c.DoReturnResponse(req)
-	defer resp.Body.Close()
+	resp, err := c.Client.Client.Do(req)
 
 	if err != nil {
 		log.Error(err)
@@ -81,7 +80,7 @@ func (c *client) GetToken(endpoint string, username string, passwd string, repos
 
 	req.SetBasicAuth(username, passwd)
 
-	data, err := c.client.Do(req)
+	data, err := c.Client.Do(req)
 	if err != nil {
 		log.Error(err)
 		return "", err
@@ -120,18 +119,9 @@ func (c *client) GetTag(endpoint, repository, token string, insecureRegistry boo
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	return c.client.Do(req)
+	return c.Client.Do(req)
 }
 
 func (c *client) Do(req *http.Request) ([]byte, error) {
-	return c.client.Do(req)
-}
-
-func (c *client) DoReturnResponse(req *http.Request) (*http.Response, error) {
-	resp, err := c.client.DoReturnResponse(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp, err
+	return c.Client.Do(req)
 }

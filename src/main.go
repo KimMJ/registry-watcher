@@ -18,7 +18,7 @@ var (
 	testEndpoint string
 )
 
-func Init() {
+func init() {
 	// set log level
 	log.SetLevel(log.DebugLevel)
 
@@ -57,7 +57,6 @@ func Init() {
 }
 
 func main() {
-	Init()
 	r := gin.Default()
 
 	r.GET("/ping", func(c *gin.Context) {
